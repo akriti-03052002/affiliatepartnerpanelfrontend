@@ -1,9 +1,10 @@
 import axios from "axios";
+import API_BASE_URL from "./apiBaseUrl";
 
 // Partner-side axios instance. Attaches the partner JWT to every
 // request and clears session + redirects to login on a 401.
 const api = axios.create({
-  baseURL: `http://${window.location.hostname}:5000/api`,
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json"
   }
