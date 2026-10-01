@@ -434,7 +434,7 @@ export default function PartnerRegister() {
             {loading
               ? "Creating Account..."
               : emailVerified
-              ? "Create Partner Account"
+              ? "Create Affiliate Account"
               : "Verify your email to continue"}
           </button>
 

@@ -59,7 +59,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Logo size="sm" />
           <Link to="/partner/login" className="text-sm font-semibold text-slate-700 hover:text-brand-black transition">
-            Partner Sign In
+            Affiliate Sign In
           </Link>
         </div>
       </header>
@@ -87,7 +87,7 @@ export default function Landing() {
             to="/partner/register"
             className="inline-flex items-center justify-center gap-2 bg-brand-black text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-charcoal transition"
           >
-            Become a Partner
+            Become an Affiliate
             <ArrowRight size={18} />
           </Link>
           <Link
@@ -178,7 +178,7 @@ export default function Landing() {
                 to="/partner/register"
                 className="inline-flex items-center justify-center gap-2 w-full bg-brand-black text-white px-6 py-3 rounded-xl font-semibold hover:bg-charcoal transition"
               >
-                Register as a {activeType.name}
+                Register as an {activeType.name}
                 <ArrowRight size={16} />
               </Link>
             </div>
@@ -202,7 +202,7 @@ export default function Landing() {
 
       <footer className="max-w-6xl mx-auto px-6 py-8 text-center">
         <p className="text-sm font-medium text-brand-black mb-1">Join a growing digital signage ecosystem.</p>
-        <p className="text-xs text-slate-400">© {new Date().getFullYear()} SPOTX. Partner Program.</p>
+        <p className="text-xs text-slate-400">© {new Date().getFullYear()} SPOTX. Affiliate Program.</p>
       </footer>
     </div>
   );
