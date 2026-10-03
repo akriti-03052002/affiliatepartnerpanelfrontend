@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, History, Landmark, RefreshCw, Search, Info, CalendarX2, X, Plus, Clock3, FileText, Download, FolderOpen } from "lucide-react";
+import { CheckCircle2, History, Landmark, RefreshCw, Search, Info, CalendarX2, X, Plus, Clock3, FileText, Download, FolderOpen, Eye } from "lucide-react";
 import adminApi from "../../services/adminApi";
 import Card from "../../components/ui/Card";
 import Table from "../../components/ui/Table";
@@ -66,6 +66,8 @@ export default function AdminSettlements() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [bill, setBill] = useState(null);
   const [billActionError, setBillActionError] = useState("");
+  // The settlement row whose bill is open in the preview modal.
+  const [billPreview, setBillPreview] = useState(null);
   const [history, setHistory] = useState([]);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -129,6 +131,14 @@ export default function AdminSettlements() {
     } catch (err) {
       setBillActionError(err.response?.data?.message || "Something went wrong verifying the bill.");
     }
+  };
+
+  // Verify/reject straight from the bill preview. Throws on failure so the
+  // modal can show the error and stay open.
+  const reviewBillFromPreview = async (settlementId, status, rejectionReason) => {
+    await adminApi.patch(`/admin/settlements/${settlementId}/bill/verify`, { status, rejectionReason });
+    setBillPreview(null);
+    load();
   };
 
   const previousPayout = useMemo(
@@ -468,6 +478,9 @@ export default function AdminSettlements() {
                   render: (s) => s.bill ? (
                     <div className="flex flex-col gap-1 items-start">
                       <Badge status={s.bill.status} />
+                      <button onClick={() => setBillPreview(s)} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:underline">
+                        <Eye size={12} /> {s.bill.status === "submitted" ? "Preview & verify" : "Preview bill"}
+                      </button>
                       <BillDownloadButton settlementId={s._id} originalName={s.bill.file?.originalName} />
                     </div>
                   ) : ["approved", "on_hold", "failed"].includes(s.status) ? (
@@ -491,7 +504,7 @@ export default function AdminSettlements() {
                           {s.bill?.status === "verified" ? (
                             <button onClick={() => openMarkPaid(s._id)} className="text-xs font-semibold text-brand-red hover:underline">Pay</button>
                           ) : s.bill?.status === "submitted" ? (
-                            <button onClick={() => setActiveId(s._id)} className="text-xs font-semibold text-emerald-600 hover:underline">Review bill</button>
+                            <button onClick={() => setBillPreview(s)} className="text-xs font-semibold text-emerald-600 hover:underline">Review bill</button>
                           ) : (
                             <span className="text-xs text-slate-400" title="The affiliate needs to upload a bill (or a corrected one) before this can be paid.">Pay after bill</span>
                           )}
@@ -525,6 +538,14 @@ export default function AdminSettlements() {
           onVerifyBill={verifyBillAction}
           loading={detailLoading}
           onClose={() => setActiveId(null)}
+        />
+      )}
+
+      {billPreview && (
+        <BillPreviewModal
+          settlement={billPreview}
+          onReview={reviewBillFromPreview}
+          onClose={() => setBillPreview(null)}
         />
       )}
 
@@ -601,6 +622,101 @@ function OverviewItem({ icon: Icon, iconTone, label, primary, secondary }) {
       <p className="text-sm font-medium text-slate-700">{label}</p>
       {secondary && <p className="text-xs text-slate-400 mt-0.5">{secondary}</p>}
       <p className="text-xl font-bold text-slate-900 mt-2">{primary}</p>
+    </div>
+  );
+}
+
+// Shows the affiliate's uploaded bill (PDF/image) so the admin can read it
+// and verify or reject it in one place, without downloading it first.
+function BillPreviewModal({ settlement, onReview, onClose }) {
+  const { bill } = settlement;
+  const [fileUrl, setFileUrl] = useState(null);
+  const [fileType, setFileType] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let objectUrl;
+    let cancelled = false;
+
+    adminApi.get(`/admin/settlements/${settlement._id}/bill/download`, { responseType: "blob" })
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = window.URL.createObjectURL(res.data);
+        setFileType(res.data.type || "");
+        setFileUrl(objectUrl);
+      })
+      .catch(() => { if (!cancelled) setError("Couldn't load a preview of this bill."); });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [settlement._id]);
+
+  const isImage = fileType.startsWith("image/");
+  const isPdf = fileType === "application/pdf";
+  const fileName = bill.file?.originalName || "Bill";
+
+  const review = async (status) => {
+    const rejectionReason = status === "rejected" ? window.prompt("Reason for rejecting this bill:") : undefined;
+    if (status === "rejected" && rejectionReason === null) return;
+    setError("");
+    setBusy(true);
+    try {
+      await onReview(settlement._id, status, rejectionReason);
+    } catch (err) {
+      setError(err.response?.data?.message || "Something went wrong reviewing the bill.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">Bill for {settlement.settlementNumber}</p>
+            <p className="text-xs text-slate-400 truncate">{fileName}</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <Badge status={bill.status} />
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-brand-black" aria-label="Close">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-50 flex items-center justify-center p-4">
+          {!fileUrl && !error && <p className="text-sm text-slate-400">Loading preview...</p>}
+          {!fileUrl && error && <p className="text-sm text-red-600">{error}</p>}
+          {fileUrl && isImage && (
+            <img src={fileUrl} alt={fileName} className="max-w-full max-h-[60vh] object-contain rounded-lg" />
+          )}
+          {fileUrl && isPdf && (
+            <iframe src={fileUrl} title={fileName} className="w-full h-[60vh] rounded-lg border border-slate-200" />
+          )}
+          {fileUrl && !isImage && !isPdf && (
+            <a href={fileUrl} download={fileName} className="text-sm font-semibold text-brand-red hover:underline">
+              No inline preview for this file type — click to download
+            </a>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-t border-slate-100 shrink-0">
+          <div className="text-sm">
+            <span className="text-slate-500">Bill should total </span>
+            <span className="font-semibold text-slate-900">{money(bill.amount?.totalBillAmount, settlement.amount.currency)}</span>
+            {fileUrl && error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          </div>
+          {bill.status === "submitted" && (
+            <div className="flex items-center gap-3">
+              <Button variant="danger" onClick={() => review("rejected")} loading={busy}>Reject</Button>
+              <Button onClick={() => review("verified")} loading={busy}>Verify bill</Button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
