@@ -457,8 +457,6 @@ function SettlementHistoryTimeline({ history }) {
 }
 
 function SettlementDetailPanel({ settlement, bill, history, onBillSubmitted, loading, onClose }) {
-  const gstAmount = bill?.status === "verified" ? bill.amount.gstAmount : 0;
-  const payable = settlement ? settlement.amount.net + gstAmount : 0;
   const canSubmitBill = settlement && needsBill(settlement, bill);
 
   return (
@@ -481,24 +479,6 @@ function SettlementDetailPanel({ settlement, bill, history, onBillSubmitted, loa
                 <p className="font-semibold text-slate-900">{settlement.settlementNumber}</p>
               </div>
               <Badge status={settlement.status} />
-            </div>
-
-            {/* Amount waterfall: gross -> deductions/TDS -> net, the
-                same line-item breakdown Razorpay shows per settlement. */}
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400 mb-3">Amount breakdown</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-slate-500">Gross Amount</span><span className="text-slate-900">{money(settlement.amount.gross, settlement.amount.currency)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Deductions</span><span className="text-red-600">- {money(settlement.amount.deductions, settlement.amount.currency)}</span></div>
-                {settlement.tax?.tdsRate > 0 && (
-                  <div className="flex justify-between pl-4"><span className="text-slate-400">TDS ({settlement.tax.tdsRate}%)</span><span className="text-slate-400">- {money(settlement.tax.tdsAmount, settlement.amount.currency)}</span></div>
-                )}
-                <div className="flex justify-between"><span className="text-slate-900 font-medium">Net Reward</span><span className="text-slate-900">{money(settlement.amount.net, settlement.amount.currency)}</span></div>
-                {gstAmount > 0 && (
-                  <div className="flex justify-between"><span className="text-slate-500">+ GST ({bill.amount.gstRatePercent}%)</span><span className="text-emerald-600">+ {money(gstAmount, settlement.amount.currency)}</span></div>
-                )}
-                <div className="flex justify-between pt-2 border-t border-slate-100 font-semibold"><span className="text-slate-900">Payable to You</span><span className="text-slate-900">{money(payable, settlement.amount.currency)}</span></div>
-              </div>
             </div>
 
             <BillSection
