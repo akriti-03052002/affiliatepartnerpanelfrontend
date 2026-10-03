@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import Logo from "../components/ui/Logo";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import AdminNotificationBell from "../components/admin/AdminNotificationBell";
 
 const NAV_ITEMS = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -78,9 +79,12 @@ export default function AdminLayout() {
           <button className="lg:hidden text-slate-500 hover:text-brand-black" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
           </button>
-          <div className="text-right ml-auto">
-            <p className="text-sm font-medium text-slate-900">{user?.name}</p>
-            <p className="text-xs text-slate-400 capitalize">{user?.role?.replace(/_/g, " ")}</p>
+          <div className="flex items-center gap-3 ml-auto">
+            <AdminNotificationBell />
+            <div className="text-right">
+              <p className="text-sm font-medium text-slate-900">{user?.name}</p>
+              <p className="text-xs text-slate-400 capitalize">{user?.role?.replace(/_/g, " ")}</p>
+            </div>
           </div>
         </header>
 

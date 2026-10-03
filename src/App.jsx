@@ -36,6 +36,7 @@ import AdminBank from "./pages/admin/AdminBank";
 import AdminLeads from "./pages/admin/AdminLeads";
 import AdminSettlements from "./pages/admin/AdminSettlements";
 import AdminConfig from "./pages/admin/AdminConfig";
+import AdminNotifications from "./pages/admin/AdminNotifications";
 
 // ======================================================
 // PARTNER ROUTE GUARDS
@@ -117,6 +118,7 @@ function App() {
               <Route path="commissions" element={<Navigate to="/admin/settlements" replace />} />
               <Route path="settlements" element={<AdminSettlements />} />
               <Route path="config" element={<AdminConfig />} />
+              <Route path="notifications" element={<AdminNotifications />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
