@@ -470,6 +470,8 @@ export default function AdminSettlements() {
                       <Badge status={s.bill.status} />
                       <BillDownloadButton settlementId={s._id} originalName={s.bill.file?.originalName} />
                     </div>
+                  ) : ["approved", "on_hold", "failed"].includes(s.status) ? (
+                    <span className="text-amber-600 text-xs font-medium">Awaiting bill</span>
                   ) : (
                     <span className="text-slate-400 text-xs">—</span>
                   )
@@ -483,9 +485,16 @@ export default function AdminSettlements() {
                       {["draft", "pending_approval"].includes(s.status) && (
                         <button onClick={() => approve(s._id)} className="text-xs font-semibold text-emerald-600 hover:underline">Approve</button>
                       )}
+                      {/* Approved → affiliate uploads bill → admin verifies → Pay. */}
                       {s.status === "approved" && (
                         <>
-                          <button onClick={() => openMarkPaid(s._id)} className="text-xs font-semibold text-brand-red hover:underline">Pay</button>
+                          {s.bill?.status === "verified" ? (
+                            <button onClick={() => openMarkPaid(s._id)} className="text-xs font-semibold text-brand-red hover:underline">Pay</button>
+                          ) : s.bill?.status === "submitted" ? (
+                            <button onClick={() => setActiveId(s._id)} className="text-xs font-semibold text-emerald-600 hover:underline">Review bill</button>
+                          ) : (
+                            <span className="text-xs text-slate-400" title="The affiliate needs to upload a bill (or a corrected one) before this can be paid.">Pay after bill</span>
+                          )}
                           <button onClick={() => openReasonModal("fail", s._id)} className="text-xs font-semibold text-red-600 hover:underline">Mark Failed</button>
                         </>
                       )}
@@ -741,16 +750,22 @@ function SettlementDetailPanel({ settlement, bill, history, billActionError, onV
             </div>
 
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400 mb-3">GST bill</p>
+              <p className="text-xs font-semibold uppercase text-slate-400 mb-3">Bill</p>
               {!bill ? (
-                <p className="text-sm text-slate-400">No bill submitted yet.</p>
+                <p className="text-sm text-slate-400">
+                  {["draft", "pending_approval"].includes(settlement.status)
+                    ? "The affiliate can upload a bill once this settlement is approved."
+                    : "No bill submitted yet. This settlement can be paid once the affiliate uploads a bill and it's verified."}
+                </p>
               ) : (
                 <div className="border border-slate-100 rounded-xl p-3 space-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-600"><FileText size={14} className="text-slate-400" /> {bill.billNumber}</span>
                     <Badge status={bill.status} />
                   </div>
-                  <div className="flex justify-between"><span className="text-slate-500">GSTIN</span><span className="text-slate-900">{bill.gstin}</span></div>
+                  {bill.gstin && (
+                    <div className="flex justify-between"><span className="text-slate-500">GSTIN</span><span className="text-slate-900">{bill.gstin}</span></div>
+                  )}
                   <div className="flex justify-between"><span className="text-slate-500">Bill date</span><span className="text-slate-900">{new Date(bill.billDate).toLocaleDateString()}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Total on bill</span><span className="text-slate-900">{money(bill.amount.totalBillAmount, settlement.amount.currency)}</span></div>
                   <BillDownloadButton settlementId={settlement._id} originalName={bill.file.originalName} />
@@ -759,10 +774,16 @@ function SettlementDetailPanel({ settlement, bill, history, billActionError, onV
                   )}
                   {billActionError && <p className="text-xs text-red-600">{billActionError}</p>}
                   {bill.status === "submitted" && (
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => onVerifyBill("verified")} className="text-xs font-semibold text-emerald-600 hover:underline">Verify</button>
-                      <button onClick={() => onVerifyBill("rejected")} className="text-xs font-semibold text-red-600 hover:underline">Reject</button>
+                    <div className="pt-1 space-y-2">
+                      <p className="text-xs text-slate-500">Check the bill file and amount, then verify it to enable payment.</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => onVerifyBill("verified")} className="text-xs font-semibold text-white bg-emerald-600 rounded-lg px-3 py-1.5 hover:bg-emerald-700 transition">Verify bill</button>
+                        <button onClick={() => onVerifyBill("rejected")} className="text-xs font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition">Reject</button>
+                      </div>
                     </div>
+                  )}
+                  {bill.status === "verified" && settlement.status === "approved" && (
+                    <p className="text-xs text-emerald-700 pt-1">Verified — ready to pay.</p>
                   )}
                 </div>
               )}

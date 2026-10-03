@@ -8,6 +8,12 @@ import { Select } from "../../components/ui/Input";
 
 const STATUS_OPTIONS = ["draft", "pending_approval", "approved", "processing", "on_hold", "paid", "failed", "cancelled"];
 
+// Mirrors BILLABLE_STATUSES in partnerSettlementBillController: a bill can
+// be uploaded once SPOTX has approved the settlement.
+const BILLABLE_STATUSES = ["approved", "on_hold", "failed"];
+const needsBill = (settlement, bill) =>
+  BILLABLE_STATUSES.includes(settlement.status) && (!bill || bill.status === "rejected");
+
 const DURATIONS = [
   { key: "all", label: "All time", days: null },
   { key: "7d", label: "Last 7 days", days: 7 },
@@ -258,7 +264,23 @@ export default function Settlements() {
                   render: (r) => r.payment?.transactionId || "—"
                 },
                 { key: "net", header: "Net Settlement", render: (r) => <span className="font-semibold text-slate-900">{money(r.amount.net, r.amount.currency)}</span> },
-                { key: "status", header: "Status", render: (r) => <Badge status={r.status} /> }
+                { key: "status", header: "Status", render: (r) => <Badge status={r.status} /> },
+                {
+                  key: "bill",
+                  header: "Bill",
+                  render: (r) => needsBill(r, r.bill) ? (
+                    <button
+                      onClick={() => { setDetailLoading(true); setActiveId(r._id); }}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-brand-red rounded-lg px-3 py-1.5 hover:opacity-90 transition"
+                    >
+                      <Upload size={12} /> {r.bill?.status === "rejected" ? "Re-upload bill" : "Upload bill"}
+                    </button>
+                  ) : r.bill ? (
+                    <Badge status={r.bill.status} />
+                  ) : (
+                    <span className="text-slate-400 text-xs">—</span>
+                  )
+                }
               ]}
             />
           )}
@@ -270,6 +292,7 @@ export default function Settlements() {
           settlement={detail}
           bill={bill}
           history={history}
+          gstRegistered={Boolean(meta.gstRegistered)}
           onBillSubmitted={() => {
             if (activeId) {
               fetchSettlementDetails(activeId).then(([detailResponse, billResponse, historyResponse]) => {
@@ -288,11 +311,10 @@ export default function Settlements() {
   );
 }
 
-// Only relevant for GST-registered partners — most partners will never
-// see anything here since checkBillRequirement (backend) only holds a
-// settlement over this in the first place if a verified GST document is
-// on file. bill is null when none has been submitted yet.
-function BillSection({ bill, canSubmitBill, settlementId, onBillSubmitted, currency }) {
+// Every affiliate uploads a bill once a settlement is approved; SPOTX
+// verifies it and then pays. GSTIN (and GST on top) only applies to
+// GST-registered partners. bill is null when none has been submitted yet.
+function BillSection({ bill, settlementStatus, canSubmitBill, gstRegistered, settlementId, onBillSubmitted, currency }) {
   const [billNumber, setBillNumber] = useState("");
   const [billDate, setBillDate] = useState("");
   const [gstin, setGstin] = useState("");
@@ -302,15 +324,17 @@ function BillSection({ bill, canSubmitBill, settlementId, onBillSubmitted, curre
 
   const submit = async () => {
     setError("");
-    if (!billNumber || !billDate || !gstin || !file) {
-      setError("Bill number, bill date, GSTIN, and a file are all required.");
+    if (!billNumber || !billDate || (gstRegistered && !gstin) || !file) {
+      setError(gstRegistered
+        ? "Bill number, bill date, GSTIN, and a file are all required."
+        : "Bill number, bill date, and a file are all required.");
       return;
     }
 
     const formData = new FormData();
     formData.append("billNumber", billNumber);
     formData.append("billDate", billDate);
-    formData.append("gstin", gstin);
+    if (gstRegistered) formData.append("gstin", gstin);
     formData.append("file", file);
 
     try {
@@ -325,11 +349,18 @@ function BillSection({ bill, canSubmitBill, settlementId, onBillSubmitted, curre
     }
   };
 
-  if (!bill && !canSubmitBill) return null;
+  const awaitingApproval = ["draft", "pending_approval"].includes(settlementStatus);
+  if (!bill && !canSubmitBill && !awaitingApproval) return null;
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase text-slate-400 mb-3">GST bill</p>
+      <p className="text-xs font-semibold uppercase text-slate-400 mb-3">Bill</p>
+
+      {!bill && awaitingApproval && (
+        <p className="text-sm text-slate-500 border border-slate-100 rounded-xl p-3">
+          You can upload your bill once SPOTX approves this settlement.
+        </p>
+      )}
 
       {bill && (
         <div className="border border-slate-100 rounded-xl p-3 space-y-2 text-sm mb-3">
@@ -342,14 +373,21 @@ function BillSection({ bill, canSubmitBill, settlementId, onBillSubmitted, curre
             <p className="text-xs text-red-600 pt-1">Rejected: {bill.rejectionReason}</p>
           )}
           {bill.status === "submitted" && (
-            <p className="text-xs text-amber-700 pt-1">Awaiting SPOTX verification — your settlement stays on hold until then.</p>
+            <p className="text-xs text-amber-700 pt-1">Awaiting SPOTX verification — you'll be paid once it's verified.</p>
+          )}
+          {bill.status === "verified" && settlementStatus !== "paid" && (
+            <p className="text-xs text-emerald-700 pt-1">Verified — SPOTX will now process your payment.</p>
           )}
         </div>
       )}
 
       {canSubmitBill && (
         <div className="border border-slate-100 rounded-xl p-3 space-y-2.5">
-          <p className="text-xs text-slate-500">{bill?.status === "rejected" ? "Submit a corrected bill:" : "You're GST-registered — submit a bill to release this settlement:"}</p>
+          <p className="text-xs text-slate-500">
+            {bill?.status === "rejected"
+              ? "Upload a corrected bill:"
+              : "This settlement is approved — upload your bill so SPOTX can verify it and pay you:"}
+          </p>
           <input
             value={billNumber}
             onChange={(e) => setBillNumber(e.target.value)}
@@ -362,12 +400,14 @@ function BillSection({ bill, canSubmitBill, settlementId, onBillSubmitted, curre
             onChange={(e) => setBillDate(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
           />
-          <input
-            value={gstin}
-            onChange={(e) => setGstin(e.target.value)}
-            placeholder="GSTIN"
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
-          />
+          {gstRegistered && (
+            <input
+              value={gstin}
+              onChange={(e) => setGstin(e.target.value)}
+              placeholder="GSTIN"
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
+            />
+          )}
           <input
             type="file"
             accept=".pdf,.png,.jpg,.jpeg"
@@ -456,10 +496,10 @@ function SettlementHistoryTimeline({ history }) {
   );
 }
 
-function SettlementDetailPanel({ settlement, bill, history, onBillSubmitted, loading, onClose }) {
+function SettlementDetailPanel({ settlement, bill, history, gstRegistered, onBillSubmitted, loading, onClose }) {
   const gstAmount = bill?.status === "verified" ? bill.amount.gstAmount : 0;
   const payable = settlement ? settlement.amount.net + gstAmount : 0;
-  const canSubmitBill = settlement && !["paid", "cancelled"].includes(settlement.status) && (!bill || bill.status === "rejected");
+  const canSubmitBill = settlement && needsBill(settlement, bill);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -501,7 +541,15 @@ function SettlementDetailPanel({ settlement, bill, history, onBillSubmitted, loa
               </div>
             </div>
 
-            <BillSection bill={bill} canSubmitBill={canSubmitBill} settlementId={settlement._id} onBillSubmitted={onBillSubmitted} currency={settlement.amount.currency} />
+            <BillSection
+              bill={bill}
+              settlementStatus={settlement.status}
+              canSubmitBill={canSubmitBill}
+              gstRegistered={gstRegistered}
+              settlementId={settlement._id}
+              onBillSubmitted={onBillSubmitted}
+              currency={settlement.amount.currency}
+            />
 
             <div>
               <p className="text-xs font-semibold uppercase text-slate-400 mb-3">Payment info</p>
