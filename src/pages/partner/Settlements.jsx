@@ -293,13 +293,9 @@ export default function Settlements() {
           bill={bill}
           history={history}
           onBillSubmitted={() => {
-            if (activeId) {
-              fetchSettlementDetails(activeId).then(([detailResponse, billResponse, historyResponse]) => {
-                setDetail(detailResponse.data.data);
-                setBill(billResponse.data.data);
-                setHistory(historyResponse.data.data);
-              });
-            }
+            // Submitting is the last thing to do here — close the panel;
+            // the table's Bill column shows the new "Submitted" status.
+            setActiveId(null);
             load();
           }}
           loading={detailLoading}
