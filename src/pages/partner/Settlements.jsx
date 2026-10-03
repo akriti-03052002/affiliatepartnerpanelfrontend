@@ -314,13 +314,21 @@ export default function Settlements() {
 // settlement is approved; SPOTX checks it and then pays. Nothing is typed
 // in — the file is the bill. bill is null when none has been uploaded yet.
 function BillSection({ bill, settlementStatus, canSubmitBill, settlementId, onBillSubmitted }) {
+  const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Picking a file uploads it straight away — the button is the whole form.
-  const upload = async (e) => {
-    const file = e.target.files[0];
+  // Two steps: pick the file, then Submit sends it. Nothing is sent to
+  // SPOTX until Submit is clicked.
+  const pickFile = (e) => {
+    const picked = e.target.files[0];
     e.target.value = "";
+    if (!picked) return;
+    setError("");
+    setFile(picked);
+  };
+
+  const submit = async () => {
     if (!file) return;
     setError("");
 
@@ -330,6 +338,7 @@ function BillSection({ bill, settlementStatus, canSubmitBill, settlementId, onBi
     try {
       setSubmitting(true);
       await api.post(`/partner/settlements/${settlementId}/bill`, formData, { headers: { "Content-Type": undefined } });
+      setFile(null);
       onBillSubmitted();
     } catch (err) {
       setError(err.response?.data?.message || "Something went wrong uploading the bill.");
@@ -372,19 +381,39 @@ function BillSection({ bill, settlementStatus, canSubmitBill, settlementId, onBi
         </div>
       )}
 
-      {canSubmitBill && (
-        <>
-          <label
-            className={`w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-brand-red rounded-xl py-2.5 transition ${
-              submitting ? "opacity-50 pointer-events-none" : "cursor-pointer hover:opacity-90"
-            }`}
-          >
-            <Upload size={15} /> {submitting ? "Uploading..." : bill?.status === "rejected" ? "Re-upload bill" : "Upload bill"}
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={upload} disabled={submitting} className="hidden" />
-          </label>
-          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-        </>
+      {canSubmitBill && !file && (
+        <label className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-brand-red rounded-xl py-2.5 transition cursor-pointer hover:opacity-90">
+          <Upload size={15} /> {bill?.status === "rejected" ? "Re-upload bill" : "Upload bill"}
+          <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={pickFile} className="hidden" />
+        </label>
       )}
+
+      {canSubmitBill && file && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2 border border-slate-100 rounded-xl p-3 text-sm">
+            <span className="flex items-center gap-1.5 text-slate-600 min-w-0">
+              <FileText size={14} className="text-slate-400 shrink-0" />
+              <span className="truncate">{file.name}</span>
+            </span>
+            {!submitting && (
+              <label className="shrink-0 text-xs font-semibold text-brand-red hover:underline cursor-pointer">
+                Change
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={pickFile} className="hidden" />
+              </label>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-brand-red rounded-xl py-2.5 transition hover:opacity-90 disabled:opacity-50"
+          >
+            {submitting ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      )}
+
+      {canSubmitBill && error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 }
