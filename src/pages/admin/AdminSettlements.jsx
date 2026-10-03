@@ -760,14 +760,18 @@ function SettlementDetailPanel({ settlement, bill, history, billActionError, onV
               ) : (
                 <div className="border border-slate-100 rounded-xl p-3 space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-600"><FileText size={14} className="text-slate-400" /> {bill.billNumber}</span>
+                    <span className="flex items-center gap-1.5 text-slate-600 min-w-0">
+                      <FileText size={14} className="text-slate-400 shrink-0" />
+                      <span className="truncate">{bill.file?.originalName || "Bill"}</span>
+                    </span>
                     <Badge status={bill.status} />
                   </div>
-                  {bill.gstin && (
-                    <div className="flex justify-between"><span className="text-slate-500">GSTIN</span><span className="text-slate-900">{bill.gstin}</span></div>
-                  )}
-                  <div className="flex justify-between"><span className="text-slate-500">Bill date</span><span className="text-slate-900">{new Date(bill.billDate).toLocaleDateString()}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Total on bill</span><span className="text-slate-900">{money(bill.amount.totalBillAmount, settlement.amount.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Uploaded</span><span className="text-slate-900">{new Date(bill.updatedAt || bill.createdAt).toLocaleString()}</span></div>
+                  {/* What the uploaded bill should add up to — check it against the document. */}
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Bill should total{bill.amount.gstAmount > 0 ? ` (incl. ${bill.amount.gstRatePercent}% GST)` : ""}</span>
+                    <span className="text-slate-900">{money(bill.amount.totalBillAmount, settlement.amount.currency)}</span>
+                  </div>
                   <BillDownloadButton settlementId={settlement._id} originalName={bill.file.originalName} />
                   {bill.status === "rejected" && bill.rejectionReason && (
                     <p className="text-xs text-red-600 pt-1">Rejected: {bill.rejectionReason}</p>

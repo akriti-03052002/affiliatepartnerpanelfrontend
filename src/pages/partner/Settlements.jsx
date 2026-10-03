@@ -292,7 +292,6 @@ export default function Settlements() {
           settlement={detail}
           bill={bill}
           history={history}
-          gstRegistered={Boolean(meta.gstRegistered)}
           onBillSubmitted={() => {
             if (activeId) {
               fetchSettlementDetails(activeId).then(([detailResponse, billResponse, historyResponse]) => {
@@ -311,36 +310,28 @@ export default function Settlements() {
   );
 }
 
-// Every affiliate uploads a bill once a settlement is approved; SPOTX
-// verifies it and then pays. GSTIN (and GST on top) only applies to
-// GST-registered partners. bill is null when none has been submitted yet.
-function BillSection({ bill, settlementStatus, canSubmitBill, gstRegistered, settlementId, onBillSubmitted, currency }) {
-  const [billNumber, setBillNumber] = useState("");
-  const [billDate, setBillDate] = useState("");
-  const [gstin, setGstin] = useState("");
+// Every affiliate uploads their own bill document (PDF/image) once a
+// settlement is approved; SPOTX checks it and then pays. Nothing is typed
+// in — the file is the bill. bill is null when none has been uploaded yet.
+function BillSection({ bill, settlementStatus, canSubmitBill, settlementId, onBillSubmitted }) {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const submit = async () => {
     setError("");
-    if (!billNumber || !billDate || (gstRegistered && !gstin) || !file) {
-      setError(gstRegistered
-        ? "Bill number, bill date, GSTIN, and a file are all required."
-        : "Bill number, bill date, and a file are all required.");
+    if (!file) {
+      setError("Choose your bill file first.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("billNumber", billNumber);
-    formData.append("billDate", billDate);
-    if (gstRegistered) formData.append("gstin", gstin);
     formData.append("file", file);
 
     try {
       setSubmitting(true);
       await api.post(`/partner/settlements/${settlementId}/bill`, formData, { headers: { "Content-Type": undefined } });
-      setBillNumber(""); setBillDate(""); setGstin(""); setFile(null);
+      setFile(null);
       onBillSubmitted();
     } catch (err) {
       setError(err.response?.data?.message || "Something went wrong submitting the bill.");
@@ -365,10 +356,12 @@ function BillSection({ bill, settlementStatus, canSubmitBill, gstRegistered, set
       {bill && (
         <div className="border border-slate-100 rounded-xl p-3 space-y-2 text-sm mb-3">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-slate-600"><FileText size={14} className="text-slate-400" /> {bill.billNumber}</span>
+            <span className="flex items-center gap-1.5 text-slate-600 min-w-0">
+              <FileText size={14} className="text-slate-400 shrink-0" />
+              <span className="truncate">{bill.file?.originalName || "Bill"}</span>
+            </span>
             <Badge status={bill.status} />
           </div>
-          <div className="flex justify-between"><span className="text-slate-500">Total on bill</span><span className="text-slate-900">{money(bill.amount.totalBillAmount, currency)}</span></div>
           {bill.status === "rejected" && bill.rejectionReason && (
             <p className="text-xs text-red-600 pt-1">Rejected: {bill.rejectionReason}</p>
           )}
@@ -389,39 +382,20 @@ function BillSection({ bill, settlementStatus, canSubmitBill, gstRegistered, set
               : "This settlement is approved — upload your bill so SPOTX can verify it and pay you:"}
           </p>
           <input
-            value={billNumber}
-            onChange={(e) => setBillNumber(e.target.value)}
-            placeholder="Bill / invoice number"
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
-          />
-          <input
-            type="date"
-            value={billDate}
-            onChange={(e) => setBillDate(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
-          />
-          {gstRegistered && (
-            <input
-              value={gstin}
-              onChange={(e) => setGstin(e.target.value)}
-              placeholder="GSTIN"
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition text-sm"
-            />
-          )}
-          <input
             type="file"
             accept=".pdf,.png,.jpg,.jpeg"
-            onChange={(e) => setFile(e.target.files[0])}
+            onChange={(e) => setFile(e.target.files[0] || null)}
             className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
           />
+          <p className="text-[11px] text-slate-400">PDF, PNG or JPG, up to 5 MB.</p>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button
             type="button"
             onClick={submit}
-            disabled={submitting}
+            disabled={submitting || !file}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-brand-red rounded-xl py-2 disabled:opacity-50"
           >
-            <Upload size={14} /> {submitting ? "Submitting..." : "Submit bill"}
+            <Upload size={14} /> {submitting ? "Uploading..." : "Upload bill"}
           </button>
         </div>
       )}
@@ -496,7 +470,7 @@ function SettlementHistoryTimeline({ history }) {
   );
 }
 
-function SettlementDetailPanel({ settlement, bill, history, gstRegistered, onBillSubmitted, loading, onClose }) {
+function SettlementDetailPanel({ settlement, bill, history, onBillSubmitted, loading, onClose }) {
   const gstAmount = bill?.status === "verified" ? bill.amount.gstAmount : 0;
   const payable = settlement ? settlement.amount.net + gstAmount : 0;
   const canSubmitBill = settlement && needsBill(settlement, bill);
@@ -545,10 +519,8 @@ function SettlementDetailPanel({ settlement, bill, history, gstRegistered, onBil
               bill={bill}
               settlementStatus={settlement.status}
               canSubmitBill={canSubmitBill}
-              gstRegistered={gstRegistered}
               settlementId={settlement._id}
               onBillSubmitted={onBillSubmitted}
-              currency={settlement.amount.currency}
             />
 
             <div>
